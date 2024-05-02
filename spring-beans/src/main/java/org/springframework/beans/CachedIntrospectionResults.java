@@ -20,6 +20,7 @@ import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.net.URL;
 import java.security.ProtectionDomain;
 import java.util.Collections;
 import java.util.Iterator;
@@ -293,9 +294,12 @@ public class CachedIntrospectionResults {
 						// Only allow all name variants of Class properties
 						continue;
 				}
-				if (pd.getPropertyType() != null && (ClassLoader.class.isAssignableFrom(pd.getPropertyType())
-					|| ProtectionDomain.class.isAssignableFrom(pd.getPropertyType()))) {
-					// Ignore ClassLoader and ProtectionDomain types - nobody needs to bind to those
+				if (URL.class == beanClass && "content".equals(pd.getName())) {
+					// Only allow URL attribute introspection, not content resolution
+					continue;
+				}
+				if (pd.getWriteMethod() == null && isInvalidReadOnlyPropertyType(pd.getPropertyType())) {
+					// Ignore read-only properties such as ClassLoader - no need to bind to those
 					continue;
 				}
 				if (logger.isTraceEnabled()) {
@@ -305,9 +309,8 @@ public class CachedIntrospectionResults {
 									"; editor [" + pd.getPropertyEditorClass().getName() + "]" : ""));
 				}
 				pd = buildGenericTypeAwarePropertyDescriptor(beanClass, pd);
-				if (pd.getPropertyType() != null && (ClassLoader.class.isAssignableFrom(pd.getPropertyType())
-					|| ProtectionDomain.class.isAssignableFrom(pd.getPropertyType()))) {
-					// Ignore ClassLoader and ProtectionDomain types - nobody needs to bind to those
+				if (pd.getWriteMethod() == null && isInvalidReadOnlyPropertyType(pd.getPropertyType())) {
+					// Ignore read-only properties such as ClassLoader - no need to bind to those
 					continue;
 				}
 				this.propertyDescriptorCache.put(pd.getName(), pd);
@@ -318,6 +321,12 @@ public class CachedIntrospectionResults {
 		catch (IntrospectionException ex) {
 			throw new FatalBeanException("Failed to obtain BeanInfo for class [" + beanClass.getName() + "]", ex);
 		}
+	}
+
+	private boolean isInvalidReadOnlyPropertyType(Class<?> returnType) {
+		return (returnType != null && (AutoCloseable.class.isAssignableFrom(returnType) ||
+				ClassLoader.class.isAssignableFrom(returnType) ||
+				ProtectionDomain.class.isAssignableFrom(returnType)));
 	}
 
 	BeanInfo getBeanInfo() {
